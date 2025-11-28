@@ -1,0 +1,10 @@
+.env
+config/config.yml
+config/openapi.yaml
+config/db/
+config/key
+config/logs
+config/letsencrypt
+node_modules
+dist
+.DS_Store

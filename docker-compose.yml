@@ -1,0 +1,117 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: pangolin_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pangolin:
+    image: fosrl/pangolin:latest
+    container_name: pangolin
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config
+      - ./bin/generate-config.sh:/generate-config.sh:ro
+    entrypoint: ["/generate-config.sh"]
+    command: ["docker-entrypoint.sh", "npm", "start"]
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - DOMAIN=${DOMAIN}
+      - DASHBOARD_URL=${DASHBOARD_URL}
+      - SERVER_SECRET=${SERVER_SECRET}
+      - PANGOLIN_INTEGRATION_PORT=${PANGOLIN_INTEGRATION_PORT:-3003}
+      - REQUIRE_EMAIL_VERIFICATION=${REQUIRE_EMAIL_VERIFICATION}
+      - DISABLE_SIGNUP_WITHOUT_INVITE=${DISABLE_SIGNUP_WITHOUT_INVITE}
+      - DISABLE_USER_CREATE_ORG=${DISABLE_USER_CREATE_ORG}
+      - ENABLE_INTEGRATION_API=${ENABLE_INTEGRATION_API}
+      - ALLOW_RAW_RESOURCES=${ALLOW_RAW_RESOURCES}
+      - EMAIL_ENABLED=${EMAIL_ENABLED}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED}
+      - RATE_LIMIT_MAX_REQUESTS_PER_MINUTE=${RATE_LIMIT_MAX_REQUESTS_PER_MINUTE}
+    ports:
+      - "${PANGOLIN_API_PORT}:3000"
+      - "${PANGOLIN_INTERNAL_PORT}:3001"
+      - "${PANGOLIN_DASHBOARD_PORT}:3002"
+      - "${PANGOLIN_INTEGRATION_PORT:-3003}:3003"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/v1/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pangolin.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.pangolin.entrypoints=websecure"
+      - "traefik.http.routers.pangolin.tls.certresolver=letsencrypt"
+      - "traefik.http.services.pangolin.loadbalancer.server.port=3002"
+
+  gerbil:
+    image: fosrl/gerbil:latest
+    container_name: gerbil
+    restart: unless-stopped
+    depends_on:
+      pangolin:
+        condition: service_healthy
+    command:
+      - --reachableAt=http://gerbil:3004
+      - --generateAndSaveKeyTo=/var/config/key
+      - --remoteConfig=http://pangolin:3001/api/v1/
+    volumes:
+      - ./config/:/var/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    ports:
+      - "51820:51820/udp"
+      - "21820:21820/udp"
+      - "443:443"
+      - "80:80"
+
+  traefik:
+    image: traefik:v3.5
+    container_name: traefik
+    restart: unless-stopped
+    network_mode: service:gerbil
+    depends_on:
+      pangolin:
+        condition: service_healthy
+    command:
+      - "--api.dashboard=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.websecure.http.tls.certresolver=letsencrypt"
+      - "--certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--log.level=INFO"
+    volumes:
+      - ./config/letsencrypt:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    driver: bridge
