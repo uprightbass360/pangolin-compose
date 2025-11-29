@@ -56,10 +56,17 @@ services:
       start_period: 40s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.pangolin.rule=Host(`${DOMAIN}`) || Host(`proxy.${DOMAIN}`)"
-      - "traefik.http.routers.pangolin.entrypoints=websecure"
-      - "traefik.http.routers.pangolin.tls.certresolver=letsencrypt"
-      - "traefik.http.services.pangolin.loadbalancer.server.port=3002"
+      # UI router (dashboard)
+      - "traefik.http.routers.pangolin-ui.rule=Host(`${DOMAIN}`) || Host(`proxy.${DOMAIN}`)"
+      - "traefik.http.routers.pangolin-ui.entrypoints=websecure"
+      - "traefik.http.routers.pangolin-ui.tls.certresolver=letsencrypt"
+      - "traefik.http.services.pangolin-ui.loadbalancer.server.port=3002"
+      # API router
+      - "traefik.http.routers.pangolin-api.rule=(Host(`${DOMAIN}`) || Host(`proxy.${DOMAIN}`)) && PathPrefix(`/api`)"
+      - "traefik.http.routers.pangolin-api.entrypoints=websecure"
+      - "traefik.http.routers.pangolin-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.pangolin-api.priority=100"
+      - "traefik.http.services.pangolin-api.loadbalancer.server.port=3001"
 
   gerbil:
     image: fosrl/gerbil:latest
