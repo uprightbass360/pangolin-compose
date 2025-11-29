@@ -26,6 +26,8 @@ services:
         condition: service_healthy
     volumes:
       - ./config:/app/config
+      - ./config/dynamic:/var/dynamic
+      - ./config/certificates:/var/certificates
       - ./bin/generate-config.sh:/generate-config.sh:ro
     entrypoint: ["/generate-config.sh"]
     command: ["docker-entrypoint.sh", "npm", "start"]
@@ -118,11 +120,15 @@ services:
       - "--certificatesresolvers.letsencrypt.acme.dnschallenge.propagation.delaybeforechecks=10"
       - "--entrypoints.websecure.http.tls.domains[0].main=${DOMAIN}"
       - "--entrypoints.websecure.http.tls.domains[0].sans=*.${DOMAIN}"
+      - "--providers.file.directory=/var/dynamic"
+      - "--providers.file.watch=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--log.level=INFO"
     volumes:
       - ./config/letsencrypt:/letsencrypt
+      - ./config/dynamic:/var/dynamic
+      - ./config/certificates:/var/certificates
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
 volumes:
