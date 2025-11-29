@@ -68,7 +68,7 @@ services:
       - "traefik.http.routers.pangolin-api.tls.certresolver=letsencrypt"
       - "traefik.http.routers.pangolin-api.priority=100"
       - "traefik.http.routers.pangolin-api.service=pangolin-api"
-      - "traefik.http.services.pangolin-api.loadbalancer.server.port=3001"
+      - "traefik.http.services.pangolin-api.loadbalancer.server.port=3000"
 
   gerbil:
     image: fosrl/gerbil:latest
